@@ -36,6 +36,7 @@ import { evmPlugin } from "@ai16z/plugin-evm";
 import { createNodePlugin } from "@ai16z/plugin-node";
 import { solanaPlugin } from "@ai16z/plugin-solana";
 import { teePlugin } from "@ai16z/plugin-tee";
+import { nearPlugin } from "@ai16z/plugin-near";
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
@@ -169,12 +170,18 @@ export async function loadCharacters(
                 if (character.plugins) {
                     elizaLogger.info("Plugins are: ", character.plugins);
                     const importedPlugins = await Promise.all(
-                        character.plugins.map(async (plugin) => {
-                            const importedPlugin = await import(plugin);
-                            return importedPlugin;
+                        character.plugins.map(async (plugin: any) => {
+                            const pluginPath = `@ai16z/plugin-${plugin.name}`;
+                            try {
+                                const importedPlugin = await import(pluginPath);
+                                return importedPlugin;
+                            } catch (error) {
+                                elizaLogger.error(`Failed to import plugin ${plugin.name}:`, error);
+                                return null;
+                            }
                         })
                     );
-                    character.plugins = importedPlugins;
+                    character.plugins = importedPlugins.filter(Boolean);
                 }
 
                 loadedCharacters.push(character);
@@ -373,6 +380,11 @@ export function createAgent(
             (getSecret(character, "WALLET_PUBLIC_KEY") &&
                 !getSecret(character, "WALLET_PUBLIC_KEY")?.startsWith("0x"))
                 ? solanaPlugin
+                : null,
+            getSecret(character, "NEAR_PUBLIC_KEY") ||
+            (getSecret(character, "WALLET_PUBLIC_KEY") &&
+                !getSecret(character, "WALLET_PUBLIC_KEY")?.startsWith("ed25519"))
+                ? nearPlugin
                 : null,
             getSecret(character, "EVM_PUBLIC_KEY") ||
             (getSecret(character, "WALLET_PUBLIC_KEY") &&
